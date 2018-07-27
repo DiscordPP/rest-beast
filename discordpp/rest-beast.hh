@@ -13,6 +13,10 @@
 #include <boost/asio/ssl/error.hpp>
 #include <boost/asio/ssl/stream.hpp>
 
+#include <nlohmann/json.hpp>
+
+#include <discordpp/botStruct.hh>
+
 namespace discordpp {
     using json = nlohmann::json;
     using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
@@ -20,14 +24,14 @@ namespace discordpp {
     namespace http = boost::beast::http;    // from <boost/beast/http.hpp>
 
     template<class BASE>
-    class RestBeast : public BASE, virtual BotStruct{
-        json call(std::string targetURL, std::string token, json body, std::string requestType) override {
+    class RestBeast : public BASE, virtual public BotStruct{
+        json call(std::string targetURL, json body, http::verb requestType) {
             std::string host = "discordapp.com";
             std::ostringstream target("/api/v");
             target << apiVersion << targetURL;
 
             // The io_context is required for all I/O
-            boost::asio::io_context ioc;
+            //asio::io_context ioc;
 
             // The SSL context is required, and holds certificates
             ssl::context ctx{ssl::context::sslv23_client};
@@ -36,8 +40,8 @@ namespace discordpp {
             //load_root_certificates(ctx);
 
             // These objects perform our I/O
-            tcp::resolver resolver{ioc};
-            ssl::stream<tcp::socket> stream{ioc, ctx};
+            tcp::resolver resolver{*aioc};
+            ssl::stream<tcp::socket> stream{*aioc, ctx};
 
             // Set SNI Hostname (many hosts need this to handshake successfully)
             if(! SSL_set_tlsext_host_name(stream.native_handle(), host.c_str()))
@@ -47,7 +51,7 @@ namespace discordpp {
             }
 
             // Look up the domain name
-            auto const results = resolver.resolve(host, "80");
+            auto const results = resolver.resolve(host, "443");
 
             // Make the connection on the IP address we get from a lookup
             boost::asio::connect(stream.next_layer(), results.begin(), results.end());
@@ -56,9 +60,15 @@ namespace discordpp {
             stream.handshake(ssl::stream_base::client);
 
             // Set up an HTTP GET request message
-            http::request<http::string_body> req{http::verb::get, target, 11};
+            http::request<http::string_body> req{requestType, target.str(), 11};
+            //req.method(requestType);
+            //req.target(target.str());
+            //req.version(11);
             req.set(http::field::host, host);
             req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+            req.set(http::field::body, body.dump());
+            req.set(http::field::content_type, "application/json");
+            req.set(http::field::authorization, token);
 
             // Send the HTTP request to the remote host
             http::write(stream, req);
@@ -104,6 +114,10 @@ namespace discordpp {
             }
 
             return jres;
+        }
+
+        json call(std::string targetURL, json body, std::string requestType) override {
+            return call(targetURL, body, http::string_to_verb(requestType));
         }
     };
 }
