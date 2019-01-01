@@ -81,7 +81,13 @@ namespace discordpp {
 
             // Receive the HTTP response
             http::read(stream, buffer, res);
-            json jres(res);
+
+            json jres;
+            {
+                std::ostringstream ss;
+                ss << res;
+                jres.parse(ss.str());
+            }
 
             // Gracefully close the stream
             boost::system::error_code ec;
