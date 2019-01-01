@@ -27,8 +27,8 @@ namespace discordpp {
     class RestBeast : public BASE, virtual public BotStruct{
         virtual json call(http::verb requestType, std::string targetURL, json body) {
             std::string host = "discordapp.com";
-            std::ostringstream target("/api/v");
-            target << apiVersion << targetURL;
+            std::ostringstream target;
+            target << "/api/v" << apiVersion << targetURL;
 
             // The io_context is required for all I/O
             //asio::io_context ioc;
