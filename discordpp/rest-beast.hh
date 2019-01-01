@@ -92,7 +92,7 @@ namespace discordpp {
             // Gracefully close the stream
             boost::system::error_code ec;
             stream.shutdown(ec);
-            if(ec == boost::asio::error::eof)
+            if(ec == boost::asio::error::eof || ec == boost::asio::ssl::error::stream_truncated)
             {
                 // Rationale:
                 // http://stackoverflow.com/questions/25587403/boost-asio-ssl-async-shutdown-always-finishes-with-an-error
