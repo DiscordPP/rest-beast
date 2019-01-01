@@ -25,7 +25,7 @@ namespace discordpp {
 
     template<class BASE>
     class RestBeast : public BASE, virtual public BotStruct{
-        json call(http::verb requestType, std::string targetURL, json body = {}) {
+        virtual json call(http::verb requestType, std::string targetURL, json body) {
             std::string host = "discordapp.com";
             std::ostringstream target("/api/v");
             target << apiVersion << targetURL;
@@ -116,7 +116,7 @@ namespace discordpp {
             return jres;
         }
 
-        json call(std::string requestType, std::string targetURL, json body = {}) override {
+        virtual json call(std::string requestType, std::string targetURL, json body) override {
             return call(http::string_to_verb(requestType), targetURL, body);
         }
     };
