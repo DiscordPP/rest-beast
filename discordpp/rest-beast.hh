@@ -103,22 +103,15 @@ namespace discordpp {
 
             // If we get here then the connection is closed gracefully
 
-            try {
-                //std::cout << returned.dump() << std::endl;
+            if(jres.find("message") != jres.end()){
                 std::string message = jres["message"].get<std::string>();
-                //std::cout << returned.dump() << std::endl;
                 if(message == "You are being rate limited."){
                     throw (ratelimit){jres["retry_after"].get<int>()};
                     //std::this_thread::sleep_for(std::chrono::milliseconds(returned["retry_after"].get<int>()));
                 }else if(message != "") {
                     std::cout << "Discord API sent a message: \"" << message << "\"" << std::endl;
                 }
-            } catch ( std::out_of_range & e) {
-
-            } catch ( std::domain_error & e) {
-
             }
-
             return jres;
         }
 
