@@ -92,7 +92,11 @@ namespace discordpp {
             {
                 std::ostringstream ss;
                 ss << res.body();
-                jres = json::parse(ss.str());
+                if(ss.str().at(0) != '{') {
+                    std::cerr << ss.str() << std::endl;
+                }else {
+                    jres = json::parse(ss.str());
+                }
             }
 
             // Gracefully close the stream
