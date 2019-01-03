@@ -67,9 +67,14 @@ namespace discordpp {
             //req.version(11);
             req.set(http::field::host, host);
             req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-            req.set(http::field::body, body.dump());
             req.set(http::field::content_type, "application/json");
             req.set(http::field::authorization, token);
+            if(!body.empty()) {
+                //req.set(http::field::body, body.dump());
+                //req.set(http::field::content_length, body.dump().length());
+                req.body() = body.dump();
+                req.prepare_payload();
+            }
 
             // Send the HTTP request to the remote host
             http::write(stream, req);
