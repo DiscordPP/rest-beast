@@ -25,6 +25,7 @@ namespace discordpp {
 
     template<class BASE>
     class RestBeast : public BASE, virtual public BotStruct{
+    public:
         virtual json call(http::verb requestType, std::string targetURL, json body) {
             std::string host = "discordapp.com";
             std::ostringstream target;
