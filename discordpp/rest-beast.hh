@@ -116,7 +116,9 @@ namespace discordpp {
             if(jres.find("message") != jres.end()){
                 std::string message = jres["message"].get<std::string>();
                 if(message == "You are being rate limited."){
-                    throw (ratelimit){jres["retry_after"].get<int>()};
+					ratelimit rt;
+					rt.millis = jres["retry_after"].get<int>();
+					throw rt;
                     //std::this_thread::sleep_for(std::chrono::milliseconds(returned["retry_after"].get<int>()));
                 }else if(message != "") {
                     std::cout << "Discord API sent a message: \"" << message << "\"" << std::endl;
@@ -125,7 +127,7 @@ namespace discordpp {
             return jres;
         }
 
-        virtual json call(std::string requestType, std::string targetURL, json body) override {
+        virtual json call(std::string requestType, std::string targetURL, json body = {}) override {
             return call(http::string_to_verb(requestType), targetURL, body);
         }
     };
