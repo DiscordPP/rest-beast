@@ -36,7 +36,9 @@ namespace discordpp{
 	// Report a failure
 	void
 	fail(beast::error_code ec, char const *what){
-		std::cerr << what << ": " << ec.message() << "\n";
+		if(std::string(what) != "shutdown" && ec.message() != "stream truncated"){
+			std::cerr << what << ": " << ec.message() << "\n";
+		}
 	}
 
 	// Performs an HTTP GET and prints the response
