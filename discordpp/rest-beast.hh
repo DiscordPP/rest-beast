@@ -12,8 +12,7 @@
 // Official repository: https://github.com/boostorg/beast
 //
 
-#ifndef DISCORDPP_REST_BEAST_HH
-#define DISCORDPP_REST_BEAST_HH
+#pragma once
 
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
@@ -296,5 +295,3 @@ namespace discordpp{
 		}
 	};
 }
-
-#endif //DISCORDPP_REST_BEAST_HH
