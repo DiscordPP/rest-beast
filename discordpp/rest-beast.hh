@@ -46,7 +46,9 @@ namespace discordpp{
 	public:
 		// Objects are constructed with a strand to
 		// ensure that handlers do not execute concurrently.
-		virtual void initBot(unsigned int apiVersionIn, const std::string &tokenIn, std::shared_ptr<boost::asio::io_context> aiocIn) override {
+		virtual void initBot(
+				unsigned int apiVersionIn, const std::string &tokenIn, std::shared_ptr<boost::asio::io_context> aiocIn
+		) override{
 			BASE::initBot(apiVersionIn, tokenIn, aiocIn);
 			ctx_ = std::make_unique<ssl::context>(ssl::context::sslv23_client);
 			resolver_ = std::make_unique<tcp::resolver>(net::make_strand(*aioc));
@@ -63,7 +65,10 @@ namespace discordpp{
 			std::ostringstream targetss;
 			targetss << "/api/v" << apiVersion << *targetURL;
 
-			runRest("discordapp.com", "443", http::string_to_verb(*requestType), targetss.str().c_str(), 11, body, callback);
+			runRest(
+					"discordapp.com", "443", http::string_to_verb(*requestType), targetss.str().c_str(), 11, body,
+					callback
+			);
 		}
 
 	private:
@@ -100,8 +105,10 @@ namespace discordpp{
 			req_.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
 			req_.set(http::field::content_type, "application/json");
 			req_.set(http::field::authorization, token);
+			std::string payload = "";
 			if(body != nullptr && !body->empty()){
-				req_.body() = body->dump();
+				payload = body->dump();
+				req_.body() = payload;
 				req_.prepare_payload();
 			}
 
@@ -116,7 +123,9 @@ namespace discordpp{
 							),
 							std::placeholders::_1,
 							std::placeholders::_2,
-							callback
+							callback,
+							std::string(target),
+							payload
 					)
 			);
 		}
@@ -124,7 +133,9 @@ namespace discordpp{
 		void on_resolve(
 				beast::error_code ec,
 				tcp::resolver::results_type results,
-				sptr<const std::function<void(const json)>> callback
+				sptr<const std::function<void(const json)>> callback,
+				const std::string target,
+				const std::string payload
 		){
 			if(ec){
 				return fail(ec, "resolve");
@@ -142,7 +153,9 @@ namespace discordpp{
 							),
 							std::placeholders::_1,
 							std::placeholders::_2,
-							callback
+							callback,
+							target,
+							payload
 					)
 			);
 		}
@@ -150,7 +163,9 @@ namespace discordpp{
 		void on_connect(
 				beast::error_code ec,
 				tcp::resolver::results_type::endpoint_type,
-				sptr<const std::function<void(const json)>> callback
+				sptr<const std::function<void(const json)>> callback,
+				const std::string target,
+				const std::string payload
 		){
 			if(ec){
 				return fail(ec, "connect");
@@ -165,12 +180,17 @@ namespace discordpp{
 									this->shared_from_this()
 							),
 							std::placeholders::_1,
-							callback
+							callback,
+							target,
+							payload
 					)
 			);
 		}
 
-		void on_handshake(beast::error_code ec, sptr<const std::function<void(const json)>> callback){
+		void on_handshake(
+				beast::error_code ec, sptr<const std::function<void(const json)>> callback, const std::string target,
+				const std::string payload
+		){
 			if(ec){
 				return fail(ec, "handshake");
 			}
@@ -179,7 +199,8 @@ namespace discordpp{
 			beast::get_lowest_layer(*stream_).expires_after(std::chrono::seconds(30));
 
 			// Send the HTTP request to the remote host
-			http::async_write(*stream_, req_,
+			http::async_write(
+					*stream_, req_,
 					std::bind(
 							beast::bind_front_handler(
 									&RestBeast::on_write,
@@ -187,14 +208,18 @@ namespace discordpp{
 							),
 							std::placeholders::_1,
 							std::placeholders::_2,
-							callback
+							callback,
+							target,
+							payload
 					)
 			);
 		}
 
 		void on_write(
 				beast::error_code ec, std::size_t bytes_transferred,
-				sptr<const std::function<void(const json)>> callback
+				sptr<const std::function<void(const json)>> callback,
+				const std::string target,
+				const std::string payload
 		){
 			boost::ignore_unused(bytes_transferred);
 
@@ -203,7 +228,8 @@ namespace discordpp{
 			}
 			res_ = std::make_unique<http::response<http::string_body>>();
 			// Receive the HTTP response
-			http::async_read(*stream_, buffer_, *res_,
+			http::async_read(
+					*stream_, buffer_, *res_,
 					std::bind(
 							beast::bind_front_handler(
 									&RestBeast::on_read,
@@ -211,14 +237,18 @@ namespace discordpp{
 							),
 							std::placeholders::_1,
 							std::placeholders::_2,
-							callback
+							callback,
+							target,
+							payload
 					)
 			);
 		}
 
 		void on_read(
 				beast::error_code ec, std::size_t bytes_transferred,
-				sptr<const std::function<void(const json)>> callback
+				sptr<const std::function<void(const json)>> callback,
+				const std::string target,
+				const std::string payload
 		){
 			boost::ignore_unused(bytes_transferred);
 
@@ -231,7 +261,8 @@ namespace discordpp{
 				std::ostringstream ss;
 				ss << res_->body();
 				if(ss.str().at(0) != '{'){
-					std::cerr << ss.str() << std::endl;
+					std::cerr << "Discord replied:\n" << ss.str() << "\nTo the following target:\n" << target
+					          << "\nWith the following payload:\n" << payload << std::endl;
 				}else{
 					jres = json::parse(ss.str());
 				}
