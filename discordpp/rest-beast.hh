@@ -98,6 +98,7 @@ namespace discordpp{
 			}
 
 			// Set up an HTTP GET request message
+			req_ = http::request<http::string_body>();
 			req_.method(requestType);
 			req_.target(target);
 			req_.version(version);
