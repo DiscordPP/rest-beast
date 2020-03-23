@@ -291,6 +291,19 @@ namespace discordpp{
 					std::cout << "Discord API sent a message: \"" << message << "\"" << std::endl;
 				}
 			}
+			if(jres.find("embed") != jres.end()){
+				std::cout << "Discord API didn't like the following parts of your embed: ";
+				bool first = true;
+				for(json part : jres["embed"]){
+					if(first){
+						first = false;
+					}else{
+						std::cout << ", ";
+					}
+					std::cout << part.get<std::string>();
+				}
+				std::cout << std::endl;
+			}
 
 			if(callback != nullptr){
 				aioc->dispatch(
