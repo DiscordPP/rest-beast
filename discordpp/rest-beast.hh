@@ -261,11 +261,17 @@ namespace discordpp{
 			{
 				std::ostringstream ss;
 				ss << res_->body();
-				if(ss.str().at(0) != '{'){
-					std::cerr << "Discord replied:\n" << ss.str() << "\nTo the following target:\n" << target
-					          << "\nWith the following payload:\n" << payload << std::endl;
-				}else{
-					jres = json::parse(ss.str());
+				std::cerr << "[[\n" << res_->body() << "\n]]\n";
+				const std::string& body = ss.str();
+				if(!body.empty()){
+					if(body.at(0) != '{'){
+						std::cerr << "Discord replied:\n" << ss.str() << "\nTo the following target:\n" << target
+						          << "\nWith the following payload:\n" << payload << std::endl;
+					}else{
+						jres = json::parse(body);
+
+						std::cerr << jres.dump(4) << '\n';
+					}
 				}
 			}
 
