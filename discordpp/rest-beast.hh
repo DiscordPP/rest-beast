@@ -53,7 +53,6 @@ namespace discordpp{
 			ctx_ = std::make_unique<ssl::context>(ssl::context::sslv23_client);
 			resolver_ = std::make_unique<tcp::resolver>(net::make_strand(*aioc));
 			stream_ = nullptr;
-			needInit["RestBeast"] = false;
 		}
 
 		void call(
