@@ -289,7 +289,8 @@ namespace discordpp{
 			if(jres.find("message") != jres.end()){
 				std::string message = jres["message"].get<std::string>();
 				if(message == "You are being rate limited."){
-					throw (ratelimit){jres["retry_after"].get<int>()};
+					ratelimit rl {jres["retry_after"].get<int>()};
+					throw rl;
 				}else if(message != ""){
 					std::cout << "Discord API sent a message: \"" << message << "\"" << std::endl;
 				}
