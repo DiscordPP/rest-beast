@@ -108,6 +108,8 @@ namespace discordpp{
 			std::string payload = "";
 			if(body != nullptr && !body->empty()){
 				payload = body->dump();
+			}
+			if(requestType == http::verb::post || requestType == http::verb::put || body != nullptr && !body->empty()){
 				req_.body() = payload;
 				req_.prepare_payload();
 			}
