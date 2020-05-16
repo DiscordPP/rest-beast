@@ -43,6 +43,7 @@ namespace discordpp{
 	// Performs an HTTP GET and prints the response
 	template<class BASE>
 	class RestBeast: public BASE, virtual public BotStruct, public std::enable_shared_from_this<RestBeast<BASE> >{
+		std::unique_ptr<boost::asio::steady_timer> retry_;
 	public:
 		// Objects are constructed with a strand to
 		// ensure that handlers do not execute concurrently.
@@ -127,7 +128,9 @@ namespace discordpp{
 							std::placeholders::_2,
 							callback,
 							std::string(target),
-							payload
+							payload,
+							host,
+							port
 					)
 			);
 		}
@@ -137,10 +140,43 @@ namespace discordpp{
 				tcp::resolver::results_type results,
 				sptr<const std::function<void(const json)>> callback,
 				const std::string target,
-				const std::string payload
+				const std::string payload,
+				char const *host,
+				char const *port
 		){
 			if(ec){
-				return fail(ec, "resolve");
+				if(connecting){
+					std::cerr << "Could not resolve host...";
+					retry_ = std::make_unique<boost::asio::steady_timer>(
+							*aioc,
+							std::chrono::steady_clock::now() + std::chrono::seconds(10)
+					);
+					retry_->async_wait(
+							[this, host, port, callback, target, payload](const boost::system::error_code){
+								std::cerr << " retrying...\n";
+								resolver_->async_resolve(
+										host,
+										port,
+										std::bind(
+												beast::bind_front_handler(
+														&RestBeast::on_resolve,
+														this->shared_from_this()
+												),
+												std::placeholders::_1,
+												std::placeholders::_2,
+												callback,
+												std::string(target),
+												payload,
+												host,
+												port
+										)
+								);
+							}
+					);
+					return;
+				}else{
+					return fail(ec, "resolve");
+				}
 			}
 			// Set a timeout on the operation
 			beast::get_lowest_layer(*stream_).expires_after(std::chrono::seconds(30));
@@ -262,7 +298,7 @@ namespace discordpp{
 			{
 				std::ostringstream ss;
 				ss << res_->body();
-				const std::string& body = ss.str();
+				const std::string &body = ss.str();
 				if(!body.empty()){
 					if(body.at(0) != '{'){
 						std::cerr << "Discord replied:\n" << ss.str() << "\nTo the following target:\n" << target
@@ -273,14 +309,16 @@ namespace discordpp{
 				}
 			}
 
-			for(auto h : {
+			for(
+				auto h : {
 					"X-RateLimit-Global",
 					"X-RateLimit-Limit",
 					"X-RateLimit-Remaining",
 					"X-RateLimit-Reset",
 					"X-RateLimit-Reset-After",
 					"X-RateLimit-Bucket"
-			}){
+			}
+					){
 				auto it = res_->find(h);
 				if(it != res_->end()){
 					jres["header"][h] = it->value();
@@ -290,7 +328,7 @@ namespace discordpp{
 			if(jres.find("message") != jres.end()){
 				std::string message = jres["message"].get<std::string>();
 				if(message == "You are being rate limited."){
-					ratelimit rl {jres["retry_after"].get<int>()};
+					ratelimit rl{jres["retry_after"].get<int>()};
 					throw rl;
 				}else if(message != ""){
 					std::cout << "Discord API sent a message: \"" << message << "\"" << std::endl;
@@ -299,7 +337,9 @@ namespace discordpp{
 			if(jres.find("embed") != jres.end()){
 				std::cout << "Discord API didn't like the following parts of your embed: ";
 				bool first = true;
-				for(json part : jres["embed"]){
+				for(
+					json part : jres["embed"]
+						){
 					if(first){
 						first = false;
 					}else{
