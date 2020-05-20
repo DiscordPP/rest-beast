@@ -149,7 +149,7 @@ namespace discordpp{
 					std::cerr << "Could not resolve host...";
 					retry_ = std::make_unique<boost::asio::steady_timer>(
 							*aioc,
-							std::chrono::steady_clock::now() + std::chrono::seconds(10)
+							std::chrono::steady_clock::now() + std::chrono::seconds(35)
 					);
 					retry_->async_wait(
 							[this, host, port, callback, target, payload](const boost::system::error_code){
