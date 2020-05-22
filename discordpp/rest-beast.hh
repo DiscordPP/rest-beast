@@ -56,18 +56,19 @@ namespace discordpp{
 			stream_ = nullptr;
 		}
 
-		void call(
+		virtual void call(
 				sptr<const std::string> requestType,
 				sptr<const std::string> targetURL,
 				sptr<const json> body,
-				sptr<const std::function<void(const json)>> callback
+				sptr<const std::function<void()>> onWrite,
+				sptr<const std::function<void(const json)>> onRead
 		) override{
 			std::ostringstream targetss;
 			targetss << "/api/v" << apiVersion << *targetURL;
 
 			runRest(
 					"discordapp.com", "443", http::string_to_verb(*requestType), targetss.str().c_str(), 11, body,
-					callback
+					onWrite, onRead
 			);
 		}
 
@@ -87,7 +88,8 @@ namespace discordpp{
 				char const *target,
 				int version,
 				sptr<const json> &body,
-				sptr<const std::function<void(const json)>> callback
+				sptr<const std::function<void()>> onWrite,
+				sptr<const std::function<void(const json)>> onRead
 		){
 			stream_ = std::make_unique<beast::ssl_stream<beast::tcp_stream> >(net::make_strand(*aioc), *ctx_);
 			// Set SNI Hostname (many hosts need this to handshake successfully)
@@ -126,7 +128,8 @@ namespace discordpp{
 							),
 							std::placeholders::_1,
 							std::placeholders::_2,
-							callback,
+							onWrite,
+							onRead,
 							std::string(target),
 							payload,
 							host,
@@ -138,7 +141,8 @@ namespace discordpp{
 		void on_resolve(
 				beast::error_code ec,
 				tcp::resolver::results_type results,
-				sptr<const std::function<void(const json)>> callback,
+				sptr<const std::function<void()>> onWrite,
+				sptr<const std::function<void(const json)>> onRead,
 				const std::string target,
 				const std::string payload,
 				char const *host,
@@ -152,7 +156,7 @@ namespace discordpp{
 							std::chrono::steady_clock::now() + std::chrono::seconds(35)
 					);
 					retry_->async_wait(
-							[this, host, port, callback, target, payload](const boost::system::error_code){
+							[this, host, port, onWrite, onRead, target, payload](const boost::system::error_code){
 								std::cerr << " retrying...\n";
 								resolver_->async_resolve(
 										host,
@@ -164,7 +168,8 @@ namespace discordpp{
 												),
 												std::placeholders::_1,
 												std::placeholders::_2,
-												callback,
+												onWrite,
+												onRead,
 												std::string(target),
 												payload,
 												host,
@@ -191,7 +196,8 @@ namespace discordpp{
 							),
 							std::placeholders::_1,
 							std::placeholders::_2,
-							callback,
+							onWrite,
+							onRead,
 							target,
 							payload
 					)
@@ -201,7 +207,8 @@ namespace discordpp{
 		void on_connect(
 				beast::error_code ec,
 				tcp::resolver::results_type::endpoint_type,
-				sptr<const std::function<void(const json)>> callback,
+				sptr<const std::function<void()>> onWrite,
+				sptr<const std::function<void(const json)>> onRead,
 				const std::string target,
 				const std::string payload
 		){
@@ -218,7 +225,8 @@ namespace discordpp{
 									this->shared_from_this()
 							),
 							std::placeholders::_1,
-							callback,
+							onWrite,
+							onRead,
 							target,
 							payload
 					)
@@ -226,7 +234,10 @@ namespace discordpp{
 		}
 
 		void on_handshake(
-				beast::error_code ec, sptr<const std::function<void(const json)>> callback, const std::string target,
+				beast::error_code ec,
+				sptr<const std::function<void()>> onWrite,
+				sptr<const std::function<void(const json)>> onRead,
+				const std::string target,
 				const std::string payload
 		){
 			if(ec){
@@ -246,7 +257,8 @@ namespace discordpp{
 							),
 							std::placeholders::_1,
 							std::placeholders::_2,
-							callback,
+							onWrite,
+							onRead,
 							target,
 							payload
 					)
@@ -255,7 +267,8 @@ namespace discordpp{
 
 		void on_write(
 				beast::error_code ec, std::size_t bytes_transferred,
-				sptr<const std::function<void(const json)>> callback,
+				sptr<const std::function<void()>> onWrite,
+				sptr<const std::function<void(const json)>> onRead,
 				const std::string target,
 				const std::string payload
 		){
@@ -264,6 +277,11 @@ namespace discordpp{
 			if(ec){
 				return fail(ec, "write");
 			}
+
+			if(onWrite){
+				aioc->post(*onWrite);
+			}
+
 			res_ = std::make_unique<http::response<http::string_body>>();
 			// Receive the HTTP response
 			http::async_read(
@@ -275,7 +293,7 @@ namespace discordpp{
 							),
 							std::placeholders::_1,
 							std::placeholders::_2,
-							callback,
+							onRead,
 							target,
 							payload
 					)
@@ -284,7 +302,7 @@ namespace discordpp{
 
 		void on_read(
 				beast::error_code ec, std::size_t bytes_transferred,
-				sptr<const std::function<void(const json)>> callback,
+				sptr<const std::function<void(const json)>> onRead,
 				const std::string target,
 				const std::string payload
 		){
@@ -350,12 +368,11 @@ namespace discordpp{
 				std::cout << std::endl;
 			}
 
-			if(callback != nullptr){
-				aioc->dispatch(
-						std::bind(
-								*callback,
-								jres
-						)
+			if(onRead){
+				aioc->post(
+						[onRead, jres](){
+							(*onRead)(jres);
+						}
 				);
 			}
 
