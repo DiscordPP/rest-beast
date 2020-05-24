@@ -1,1 +1,1 @@
-# rest-beast
+# REST: Beast
