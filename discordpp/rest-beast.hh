@@ -32,14 +32,6 @@ namespace discordpp{
 	namespace ssl = boost::asio::ssl;       // from <boost/asio/ssl.hpp>
 	using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
-	// Report a failure
-	void
-	fail(beast::error_code ec, char const *what){
-		if(std::string(what) != "shutdown" && ec.message() != "stream truncated"){
-			std::cerr << what << ": " << ec.message() << "\n";
-		}
-	}
-
 	// Performs an HTTP GET and prints the response
 	template<class BASE>
 	class RestBeast: public BASE, virtual public BotStruct, public std::enable_shared_from_this<RestBeast<BASE> >{
@@ -67,12 +59,28 @@ namespace discordpp{
 			targetss << "/api/v" << apiVersion << *targetURL;
 
 			runRest(
-					"discordapp.com", "443", http::string_to_verb(*requestType), targetss.str().c_str(), 11, body,
-					onWrite, onRead
+					"discordapp.com", "443", http::string_to_verb(*requestType), targetss.str().c_str(), 11,
+					std::make_shared<Call>(requestType, targetURL, body, onWrite, onRead)
 			);
 		}
 
 	private:
+		struct Call{
+			Call(
+				sptr<const std::string> requestType, sptr<const std::string> targetUrl, sptr<const json> body,
+				sptr<const std::function<void()>> onWrite, sptr<const std::function<void(const json)>> onRead
+			): requestType(std::move(requestType)),
+			   targetURL(std::move(targetUrl)),
+			   body(std::move(body)), onWrite(std::move(onWrite)),
+			   onRead(std::move(onRead)){}
+			
+			sptr<const std::string> requestType;
+			sptr<const std::string> targetURL;
+			sptr<const json> body;
+			sptr<const std::function<void()>> onWrite;
+			sptr<const std::function<void(const json)>> onRead;
+		};
+		
 		std::unique_ptr<tcp::resolver> resolver_ = nullptr;
 		std::unique_ptr<beast::ssl_stream<beast::tcp_stream> > stream_ = nullptr;
 		beast::flat_buffer buffer_; // (Must persist between reads)
@@ -87,9 +95,7 @@ namespace discordpp{
 				http::verb const requestType,
 				char const *target,
 				int version,
-				sptr<const json> &body,
-				sptr<const std::function<void()>> onWrite,
-				sptr<const std::function<void(const json)>> onRead
+				sptr<Call> call
 		){
 			stream_ = std::make_unique<beast::ssl_stream<beast::tcp_stream> >(net::make_strand(*aioc), *ctx_);
 			// Set SNI Hostname (many hosts need this to handshake successfully)
@@ -109,10 +115,10 @@ namespace discordpp{
 			req_.set(http::field::content_type, "application/json");
 			req_.set(http::field::authorization, token);
 			std::string payload = "";
-			if(body != nullptr && !body->empty()){
-				payload = body->dump();
+			if(call->body != nullptr && !call->body->empty()){
+				payload = call->body->dump();
 			}
-			if(requestType == http::verb::post || requestType == http::verb::put || body != nullptr && !body->empty()){
+			if(requestType == http::verb::post || requestType == http::verb::put || call->body != nullptr && !call->body->empty()){
 				req_.body() = payload;
 				req_.prepare_payload();
 			}
@@ -128,8 +134,7 @@ namespace discordpp{
 							),
 							std::placeholders::_1,
 							std::placeholders::_2,
-							onWrite,
-							onRead,
+							call,
 							std::string(target),
 							payload,
 							host,
@@ -141,8 +146,7 @@ namespace discordpp{
 		void on_resolve(
 				beast::error_code ec,
 				tcp::resolver::results_type results,
-				sptr<const std::function<void()>> onWrite,
-				sptr<const std::function<void(const json)>> onRead,
+				sptr<Call> call,
 				const std::string target,
 				const std::string payload,
 				char const *host,
@@ -156,7 +160,7 @@ namespace discordpp{
 							std::chrono::steady_clock::now() + std::chrono::seconds(35)
 					);
 					retry_->async_wait(
-							[this, host, port, onWrite, onRead, target, payload](const boost::system::error_code){
+							[this, host, port, call, target, payload](const boost::system::error_code){
 								std::cerr << " retrying...\n";
 								resolver_->async_resolve(
 										host,
@@ -168,8 +172,7 @@ namespace discordpp{
 												),
 												std::placeholders::_1,
 												std::placeholders::_2,
-												onWrite,
-												onRead,
+												call,
 												std::string(target),
 												payload,
 												host,
@@ -180,7 +183,7 @@ namespace discordpp{
 					);
 					return;
 				}else{
-					return fail(ec, "resolve");
+					return fail(ec, "resolve", call);
 				}
 			}
 			// Set a timeout on the operation
@@ -196,8 +199,7 @@ namespace discordpp{
 							),
 							std::placeholders::_1,
 							std::placeholders::_2,
-							onWrite,
-							onRead,
+							call,
 							target,
 							payload
 					)
@@ -207,13 +209,12 @@ namespace discordpp{
 		void on_connect(
 				beast::error_code ec,
 				tcp::resolver::results_type::endpoint_type,
-				sptr<const std::function<void()>> onWrite,
-				sptr<const std::function<void(const json)>> onRead,
+				sptr<Call> call,
 				const std::string target,
 				const std::string payload
 		){
 			if(ec){
-				return fail(ec, "connect");
+				return fail(ec, "connect", call);
 			}
 
 			// Perform the SSL handshake
@@ -225,8 +226,7 @@ namespace discordpp{
 									this->shared_from_this()
 							),
 							std::placeholders::_1,
-							onWrite,
-							onRead,
+							call,
 							target,
 							payload
 					)
@@ -235,13 +235,12 @@ namespace discordpp{
 
 		void on_handshake(
 				beast::error_code ec,
-				sptr<const std::function<void()>> onWrite,
-				sptr<const std::function<void(const json)>> onRead,
+				sptr<Call> call,
 				const std::string target,
 				const std::string payload
 		){
 			if(ec){
-				return fail(ec, "handshake");
+				return fail(ec, "handshake", call);
 			}
 
 			// Set a timeout on the operation
@@ -257,8 +256,7 @@ namespace discordpp{
 							),
 							std::placeholders::_1,
 							std::placeholders::_2,
-							onWrite,
-							onRead,
+							call,
 							target,
 							payload
 					)
@@ -267,19 +265,18 @@ namespace discordpp{
 
 		void on_write(
 				beast::error_code ec, std::size_t bytes_transferred,
-				sptr<const std::function<void()>> onWrite,
-				sptr<const std::function<void(const json)>> onRead,
+				sptr<Call> call,
 				const std::string target,
 				const std::string payload
 		){
 			boost::ignore_unused(bytes_transferred);
 
 			if(ec){
-				return fail(ec, "write");
+				return fail(ec, "write", call);
 			}
 
-			if(onWrite){
-				aioc->post(*onWrite);
+			if(call->onWrite){
+				aioc->post(*call->onWrite);
 			}
 
 			res_ = std::make_unique<http::response<http::string_body>>();
@@ -293,7 +290,7 @@ namespace discordpp{
 							),
 							std::placeholders::_1,
 							std::placeholders::_2,
-							onRead,
+							call,
 							target,
 							payload
 					)
@@ -302,14 +299,14 @@ namespace discordpp{
 
 		void on_read(
 				beast::error_code ec, std::size_t bytes_transferred,
-				sptr<const std::function<void(const json)>> onRead,
+				sptr<Call> call,
 				const std::string target,
 				const std::string payload
 		){
 			boost::ignore_unused(bytes_transferred);
 
 			if(ec){
-				return fail(ec, "read");
+				return fail(ec, "read", call);
 			}
 
 			json jres;
@@ -367,11 +364,15 @@ namespace discordpp{
 				}
 				std::cout << std::endl;
 			}
+			
+			log::log(log::info, [call, jres](std::ostream *log){
+				*log << "Read " << call->targetURL << jres.dump(4) << '\n';
+			});
 
-			if(onRead){
+			if(call->onRead){
 				aioc->post(
-						[onRead, jres](){
-							(*onRead)(jres);
+						[call, jres](){
+							(*call->onRead)(jres);
 						}
 				);
 			}
@@ -381,24 +382,40 @@ namespace discordpp{
 
 			// Gracefully close the stream
 			stream_->async_shutdown(
+				//std::bind(
 					beast::bind_front_handler(
 							&RestBeast::on_shutdown,
 							this->shared_from_this()
-					)
+					)//,
+					//call
+				//)
 			);
 		}
 
-		void on_shutdown(beast::error_code ec){
+		void on_shutdown(beast::error_code ec/*, sptr<Call> call*/){
 			if(ec == net::error::eof){
 				// Rationale:
 				// http://stackoverflow.com/questions/25587403/boost-asio-ssl-async-shutdown-always-finishes-with-an-error
 				ec = {};
 			}
 			if(ec){
-				return fail(ec, "shutdown");
+				return fail(ec, "shutdown", nullptr);
 			}
 
 			// If we get here then the connection is closed gracefully
+		}
+		
+		// Report a failure
+		static void fail(beast::error_code ec, char const *what, sptr<Call> call){
+			if(std::string(what) != "shutdown" && ec.message() != "stream truncated"){
+				log::log(log::error, [ec, what, call](std::ostream* log){
+					*log << what << ": " << ec.message();
+					if(call != nullptr){
+						*log << ' ' << *call->targetURL << (call->body ? call->body->dump(4) : "{}");
+					}
+					*log << '\n';
+				});
+			}
 		}
 	};
 }
