@@ -122,7 +122,7 @@ namespace discordpp{
 			if(call->body != nullptr && !call->body->empty()){
 				payload = call->body->dump();
 			}
-			if(requestType == http::verb::post || requestType == http::verb::put || call->body != nullptr && !call->body->empty()){
+			if(requestType == http::verb::post || requestType == http::verb::put || (call->body != nullptr && !call->body->empty())){
 				session->req.body() = payload;
 				session->req.prepare_payload();
 			}
