@@ -32,14 +32,6 @@ namespace discordpp{
 	namespace ssl = boost::asio::ssl;       // from <boost/asio/ssl.hpp>
 	using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
-	// Report a failure
-	void
-	fail(beast::error_code ec, char const *what){
-		if(std::string(what) != "shutdown" && ec.message() != "stream truncated"){
-			std::cerr << what << ": " << ec.message() << "\n";
-		}
-	}
-
 	// Performs an HTTP GET and prints the response
 	template<class BASE>
 	class RestBeast: public BASE, virtual public BotStruct, public std::enable_shared_from_this<RestBeast<BASE> >{
@@ -78,6 +70,14 @@ namespace discordpp{
 		http::request<http::string_body> req_;
 		std::unique_ptr<http::response<http::string_body>> res_;
 		std::unique_ptr<ssl::context> ctx_;
+		
+		// Report a failure
+		void
+		fail(beast::error_code ec, char const *what){
+			if(std::string(what) != "shutdown" && ec.message() != "stream truncated"){
+				std::cerr << what << ": " << ec.message() << "\n";
+			}
+		}
 
 		// Start the asynchronous operation
 		void runRest(
