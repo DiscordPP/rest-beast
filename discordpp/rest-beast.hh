@@ -50,8 +50,8 @@ namespace discordpp{
 				sptr<const std::string> requestType,
 				sptr<const std::string> targetURL,
 				sptr<const json> body,
-				sptr<const std::function<void()>> onWrite,
-				sptr<const std::function<void(const json)>> onRead
+				sptr<const handleWrite> onWrite,
+				sptr<const handleRead> onRead
 		) override{
 			std::ostringstream targetss;
 			targetss << "/api/v" << apiVersion << *targetURL;
@@ -66,7 +66,7 @@ namespace discordpp{
 		struct Call{
 			Call(
 				sptr<const std::string> requestType, sptr<const std::string> targetUrl, sptr<const json> body,
-				sptr<const std::function<void()>> onWrite, sptr<const std::function<void(const json)>> onRead
+				sptr<const handleWrite> onWrite, sptr<const handleRead> onRead
 			): requestType(std::move(requestType)),
 			   targetURL(std::move(targetUrl)),
 			   body(std::move(body)), onWrite(std::move(onWrite)),
@@ -75,8 +75,8 @@ namespace discordpp{
 			sptr<const std::string> requestType;
 			sptr<const std::string> targetURL;
 			sptr<const json> body;
-			sptr<const std::function<void()>> onWrite;
-			sptr<const std::function<void(const json)>> onRead;
+			sptr<const handleWrite> onWrite;
+			sptr<const handleRead> onRead;
 		};
 		struct Session{
 			Session(boost::asio::io_context &aioc, ssl::context &ctx):
