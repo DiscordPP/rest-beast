@@ -190,7 +190,7 @@ namespace discordpp{
 					);
 					return;
 				}else{
-					if(call->onWrite)aioc->post([call]{(*call->onWrite)(true, {});});
+					if(call->onWrite)aioc->post([call]{(*call->onWrite)(true);});
 					if(call->onRead)aioc->post([call]{(*call->onRead)(true, {});});
 					return fail(ec, "resolve", call);
 				}
@@ -225,7 +225,7 @@ namespace discordpp{
 				const std::string payload
 		){
 			if(ec){
-				if(call->onWrite)aioc->post([call]{(*call->onWrite)(true, {});});
+				if(call->onWrite)aioc->post([call]{(*call->onWrite)(true);});
 				if(call->onRead)aioc->post([call]{(*call->onRead)(true, {});});
 				return fail(ec, "connect", call);
 			}
@@ -255,7 +255,7 @@ namespace discordpp{
 				const std::string payload
 		){
 			if(ec){
-				if(call->onWrite)aioc->post([call]{(*call->onWrite)(true, {});});
+				if(call->onWrite)aioc->post([call]{(*call->onWrite)(true);});
 				if(call->onRead)aioc->post([call]{(*call->onRead)(true, {});});
 				return fail(ec, "handshake", call);
 			}
@@ -292,7 +292,7 @@ namespace discordpp{
 			boost::ignore_unused(bytes_transferred);
 
 			if(ec){
-				if(call->onWrite)aioc->post([call]{(*call->onWrite)(true, {});});
+				if(call->onWrite)aioc->post([call]{(*call->onWrite)(true);});
 				if(call->onRead)aioc->post([call]{(*call->onRead)(true, {});});
 				return fail(ec, "write", call);
 			}
@@ -397,8 +397,7 @@ namespace discordpp{
 			if(call->onRead){
 				aioc->post(
 						[call, jres](){
-							false,
-							(*call->onRead)(jres);
+							(*call->onRead)(false, jres);
 						}
 				);
 			}
