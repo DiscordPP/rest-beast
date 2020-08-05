@@ -348,6 +348,8 @@ namespace discordpp{
 					}
 				}
 			}
+			
+			jres["result"] = session->res.result_int();
 
 			for(
 				auto h : {
@@ -364,16 +366,7 @@ namespace discordpp{
 					jres["header"][h] = it->value();
 				}
 			}
-
-			if(jres.find("message") != jres.end()){
-				std::string message = jres["message"].get<std::string>();
-				if(message == "You are being rate limited."){
-					ratelimit rl{jres["retry_after"].get<int>()};
-					throw rl;
-				}else if(message != ""){
-					std::cout << "Discord API sent a message: \"" << message << "\"" << std::endl;
-				}
-			}
+			
 			if(jres.find("embed") != jres.end()){
 				std::cout << "Discord API didn't like the following parts of your embed: ";
 				bool first = true;
@@ -396,8 +389,8 @@ namespace discordpp{
 
 			if(call->onRead){
 				aioc->post(
-						[call, jres](){
-							(*call->onRead)(false, jres);
+						[call, jres, result = session->res.result_int()](){
+							(*call->onRead)(result != 200, jres);
 						}
 				);
 			}
