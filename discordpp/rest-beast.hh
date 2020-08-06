@@ -300,7 +300,7 @@ class RestBeast : public BASE,
             std::cout << std::endl;
         }
 
-        log::log(log::info, [call, jres](std::ostream *log) {
+        log::log(log::debug, [call, jres](std::ostream *log) {
             *log << "Read " << call->targetURL << jres.dump(4) << '\n';
         });
 
