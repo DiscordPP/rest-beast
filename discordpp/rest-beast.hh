@@ -262,6 +262,9 @@ class RestBeast : public BASE,
             std::ostringstream ss;
             ss << session->res.body();
             const std::string &body = ss.str();
+            log::log(log::trace, [body](std::ostream *log) {
+              *log << "Received: " << body << '\n';
+            });
             if (!body.empty()) {
                 if (body.at(0) != '{') {
                     std::cerr << "Discord replied:\n"
