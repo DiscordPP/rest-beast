@@ -112,6 +112,7 @@ class RestBeast : public BASE,
         session->req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
         session->req.set(http::field::content_type, "application/json");
         session->req.set(http::field::authorization, token);
+        session->req.set("X-RateLimit-Precision", "millisecond");
         std::string payload = "";
         if (call->body != nullptr && !call->body->empty()) {
             payload = call->body->dump();
