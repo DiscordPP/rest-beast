@@ -310,7 +310,7 @@ class RestBeast : public BASE,
 
         if (call->onRead) {
             aioc->post([call, jres, result = session->res.result_int()]() {
-                (*call->onRead)(result != 200, jres);
+                (*call->onRead)(result < 200 || result >= 300, jres);
             });
         }
 
