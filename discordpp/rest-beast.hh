@@ -19,18 +19,34 @@
 #include <boost/beast/http.hpp>
 #include <boost/beast/ssl.hpp>
 #include <boost/beast/version.hpp>
-
-#include <nlohmann/json.hpp>
+#include <boost/certify/extensions.hpp>
+#include <boost/certify/https_verification.hpp>
 
 #include <discordpp/botStruct.hh>
 
 namespace discordpp {
-using json = nlohmann::json;
 namespace beast = boost::beast;   // from <boost/beast.hpp>
 namespace http = beast::http;     // from <boost/beast/http.hpp>
 namespace net = boost::asio;      // from <boost/asio.hpp>
 namespace ssl = boost::asio::ssl; // from <boost/asio/ssl.hpp>
 using tcp = boost::asio::ip::tcp; // from <boost/asio/ip/tcp.hpp>
+
+#ifndef DPP_SSL_CTX
+#define DPP_SSL_CTX
+ssl::context &ctx() {
+    static ssl::context ctx_{ssl::context::tlsv13_client};
+    static bool init = false;
+    if(!init) {
+        init = true;
+        ctx_.set_verify_mode(ssl::context::verify_peer);
+        ctx_.set_default_verify_paths();
+        boost::certify::enable_native_https_server_verification(ctx_);
+    }
+    return ctx_;
+}
+#else
+ssl::context &ctx();
+#endif
 
 // Performs an HTTP GET and prints the response
 template <class BASE>
@@ -46,7 +62,6 @@ class RestBeast : public BASE,
     initBot(unsigned int apiVersionIn, const std::string &tokenIn,
             std::shared_ptr<boost::asio::io_context> aiocIn) override {
         BASE::initBot(apiVersionIn, tokenIn, aiocIn);
-        ctx_ = std::make_unique<ssl::context>(ssl::context::sslv23_client);
     }
 
     virtual void call(sptr<const std::string> requestType,
@@ -78,8 +93,8 @@ class RestBeast : public BASE,
         sptr<const handleRead> onRead;
     };
     struct Session {
-        Session(boost::asio::io_context &aioc, ssl::context &ctx)
-            : resolver(aioc), stream(net::make_strand(aioc), ctx) {}
+        Session(boost::asio::io_context &aioc)
+            : resolver(aioc), stream(net::make_strand(aioc), ctx()) {}
 
         tcp::resolver resolver;
         beast::ssl_stream<beast::tcp_stream> stream;
@@ -88,13 +103,11 @@ class RestBeast : public BASE,
         http::response<http::string_body> res;
     };
 
-    std::unique_ptr<ssl::context> ctx_;
-
     // Start the asynchronous operation
     void runRest(char const *host, char const *port,
                  http::verb const requestType, char const *target, int version,
                  sptr<Call> call) {
-        sptr<Session> session = std::make_shared<Session>(*aioc, *ctx_);
+        sptr<Session> session = std::make_shared<Session>(*aioc);
 
         // Set SNI Hostname (many hosts need this to handshake successfully)
         if (!SSL_set_tlsext_host_name(session->stream.native_handle(), host)) {
