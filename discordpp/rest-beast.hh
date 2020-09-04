@@ -137,11 +137,11 @@ class RestBeast : public BASE,
                     const std::string target, const std::string payload,
                     char const *host, char const *port) {
         if (ec) {
-            if (connecting) {
+            if (connecting_) {
                 std::cerr << "Could not resolve host...";
                 retry_ = std::make_unique<boost::asio::steady_timer>(
                     *aioc, std::chrono::steady_clock::now() +
-                               std::chrono::seconds(35));
+                               std::chrono::seconds(5));
                 retry_->async_wait([this, host, port, session, call, target,
                                     payload](const boost::system::error_code) {
                     std::cerr << " retrying...\n";
