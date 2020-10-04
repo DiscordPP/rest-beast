@@ -140,8 +140,8 @@ class RestBeast : public BASE,
             if (connecting_) {
                 std::cerr << "Could not resolve host...";
                 retry_ = std::make_unique<boost::asio::steady_timer>(
-                    *aioc, std::chrono::steady_clock::now() +
-                               std::chrono::seconds(5));
+                    *aioc,
+                    std::chrono::steady_clock::now() + std::chrono::seconds(5));
                 retry_->async_wait([this, host, port, session, call, target,
                                     payload](const boost::system::error_code) {
                     std::cerr << " retrying...\n";
@@ -264,7 +264,7 @@ class RestBeast : public BASE,
             ss << session->res.body();
             const std::string &body = ss.str();
             log::log(log::trace, [body](std::ostream *log) {
-              *log << "Received: " << body << '\n';
+                *log << "Received: " << body << '\n';
             });
             if (!body.empty()) {
                 if (body.at(0) != '{') {
@@ -307,6 +307,14 @@ class RestBeast : public BASE,
         log::log(log::debug, [call, jres](std::ostream *log) {
             *log << "Read " << call->targetURL << jres.dump(4) << '\n';
         });
+
+        if (session->res.result_int() < 200 ||
+            session->res.result_int() >= 300) {
+            log::log(log::error, [call, jres](std::ostream *log) {
+                *log << "Discord sent an error! " << call->targetURL
+                     << jres.dump(4) << '\n';
+            });
+        }
 
         if (call->onRead) {
             aioc->post([call, jres, result = session->res.result_int()]() {
