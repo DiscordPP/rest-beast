@@ -23,9 +23,9 @@
 #include <nlohmann/json.hpp>
 
 #include <discordpp/botStruct.hh>
+#include <discordpp/call.hh>
 
 namespace discordpp {
-using json = nlohmann::json;
 namespace beast = boost::beast;   // from <boost/beast.hpp>
 namespace http = beast::http;     // from <boost/beast/http.hpp>
 namespace net = boost::asio;      // from <boost/asio.hpp>
@@ -49,34 +49,16 @@ class RestBeast : public BASE,
         ctx_ = std::make_unique<ssl::context>(ssl::context::sslv23_client);
     }
 
-    virtual void call(sptr<const std::string> requestType,
-                      sptr<const std::string> targetURL, sptr<const json> body,
-                      sptr<const handleWrite> onWrite,
-                      sptr<const handleRead> onRead) override {
+    virtual void call(sptr<Call> call) override {
         std::ostringstream targetss;
-        targetss << "/api/v" << apiVersion << *targetURL;
+        targetss << "/api/v" << apiVersion << *call->targetURL;
 
-        runRest("discordapp.com", "443", http::string_to_verb(*requestType),
-                targetss.str().c_str(), 11,
-                std::make_shared<Call>(requestType, targetURL, body, onWrite,
-                                       onRead));
+        runRest("discordapp.com", "443",
+                http::string_to_verb(*call->requestType),
+                targetss.str().c_str(), 11, call);
     }
 
   private:
-    struct Call {
-        Call(sptr<const std::string> requestType,
-             sptr<const std::string> targetUrl, sptr<const json> body,
-             sptr<const handleWrite> onWrite, sptr<const handleRead> onRead)
-            : requestType(std::move(requestType)),
-              targetURL(std::move(targetUrl)), body(std::move(body)),
-              onWrite(std::move(onWrite)), onRead(std::move(onRead)) {}
-
-        sptr<const std::string> requestType;
-        sptr<const std::string> targetURL;
-        sptr<const json> body;
-        sptr<const handleWrite> onWrite;
-        sptr<const handleRead> onRead;
-    };
     struct Session {
         Session(boost::asio::io_context &aioc, ssl::context &ctx)
             : resolver(aioc), stream(net::make_strand(aioc), ctx) {}
