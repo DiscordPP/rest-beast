@@ -249,12 +249,10 @@ class RestBeast : public BASE,
                 *log << "Received: " << body << '\n';
             });
             if (!body.empty()) {
-                if (body.at(0) == '{') {
-                	jres = json::parse(body);
-                } else if (body.at(0) == '[') {
+                if (body.at(0) == '{' || body.at(0) == '[') {
                     jres = {{"body", json::parse(body)}};
                 } else {
-                	std::cerr << "Discord replied:\n"
+                    std::cerr << "Discord replied:\n"
                               << ss.str() << "\nTo the following target:\n"
                               << target << "\nWith the following payload:\n"
                               << payload << std::endl;
