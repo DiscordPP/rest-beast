@@ -275,7 +275,7 @@ class RestBeast : public BASE,
             std::cout << "Discord API didn't like the following parts of your "
                          "embed: ";
             bool first = true;
-            for (json part : jres["embed"]) {
+            for (const json& part : jres["embed"]) {
                 if (first) {
                     first = false;
                 } else {
