@@ -51,10 +51,10 @@ class RestBeast : public BASE,
 
     virtual void call(sptr<Call> call) override {
         std::ostringstream targetss;
-        targetss << "/api/v" << apiVersion << *call->targetURL;
+        targetss << "/api/v" << apiVersion << *call->targetURL_;
 
         runRest("discordapp.com", "443",
-                http::string_to_verb(*call->requestType),
+                http::string_to_verb(*call->requestType_),
                 targetss.str().c_str(), 11, call);
     }
 
@@ -96,11 +96,11 @@ class RestBeast : public BASE,
         session->req.set(http::field::authorization, token);
         session->req.set("X-RateLimit-Precision", "millisecond");
         std::string payload = "";
-        if (call->body != nullptr && !call->body->empty()) {
-            payload = call->body->dump();
+        if (call->body_ != nullptr && !call->body_->empty()) {
+            payload = call->body_->dump();
         }
         if (requestType == http::verb::post || requestType == http::verb::put ||
-            (call->body != nullptr && !call->body->empty())) {
+            (call->body_ != nullptr && !call->body_->empty())) {
             session->req.body() = payload;
             session->req.prepare_payload();
         }
@@ -138,10 +138,10 @@ class RestBeast : public BASE,
                 });
                 return;
             } else {
-                if (call->onWrite)
-                    aioc->post([call] { (*call->onWrite)(true); });
-                if (call->onRead)
-                    aioc->post([call] { (*call->onRead)(true, {}); });
+                if (call->onWrite_)
+                    aioc->post([call] { (*call->onWrite_)(true); });
+                if (call->onRead_)
+                    aioc->post([call] { (*call->onRead_)(true, {}); });
                 return fail(ec, "resolve", call);
             }
         }
@@ -164,10 +164,10 @@ class RestBeast : public BASE,
                     sptr<Session> session, sptr<Call> call,
                     const std::string target, const std::string payload) {
         if (ec) {
-            if (call->onWrite)
-                aioc->post([call] { (*call->onWrite)(true); });
-            if (call->onRead)
-                aioc->post([call] { (*call->onRead)(true, {}); });
+            if (call->onWrite_)
+                aioc->post([call] { (*call->onWrite_)(true); });
+            if (call->onRead_)
+                aioc->post([call] { (*call->onRead_)(true, {}); });
             return fail(ec, "connect", call);
         }
 
@@ -183,10 +183,10 @@ class RestBeast : public BASE,
                       sptr<Call> call, const std::string target,
                       const std::string payload) {
         if (ec) {
-            if (call->onWrite)
-                aioc->post([call] { (*call->onWrite)(true); });
-            if (call->onRead)
-                aioc->post([call] { (*call->onRead)(true, {}); });
+            if (call->onWrite_)
+                aioc->post([call] { (*call->onWrite_)(true); });
+            if (call->onRead_)
+                aioc->post([call] { (*call->onRead_)(true, {}); });
             return fail(ec, "handshake", call);
         }
 
@@ -209,15 +209,15 @@ class RestBeast : public BASE,
         boost::ignore_unused(bytes_transferred);
 
         if (ec) {
-            if (call->onWrite)
-                aioc->post([call] { (*call->onWrite)(true); });
-            if (call->onRead)
-                aioc->post([call] { (*call->onRead)(true, {}); });
+            if (call->onWrite_)
+                aioc->post([call] { (*call->onWrite_)(true); });
+            if (call->onRead_)
+                aioc->post([call] { (*call->onRead_)(true, {}); });
             return fail(ec, "write", call);
         }
 
-        if (call->onWrite) {
-            aioc->post([call] { (*call->onWrite)(false); });
+        if (call->onWrite_) {
+            aioc->post([call] { (*call->onWrite_)(false); });
         }
 
         // Receive the HTTP response
@@ -235,8 +235,8 @@ class RestBeast : public BASE,
         boost::ignore_unused(bytes_transferred);
 
         if (ec) {
-            if (call->onRead)
-                aioc->post([call] { (*call->onRead)(true, {}); });
+            if (call->onRead_)
+                aioc->post([call] { (*call->onRead_)(true, {}); });
             return fail(ec, "read", call);
         }
 
@@ -287,20 +287,20 @@ class RestBeast : public BASE,
         }
 
         log::log(log::debug, [call, jres](std::ostream *log) {
-            *log << "Read " << call->targetURL << jres.dump(4) << '\n';
+            *log << "Read " << call->targetURL_ << jres.dump(4) << '\n';
         });
 
         if (session->res.result_int() < 200 ||
             session->res.result_int() >= 300) {
             log::log(log::error, [call, jres](std::ostream *log) {
-                *log << "Discord sent an error! " << call->targetURL
+                *log << "Discord sent an error! " << call->targetURL_
                      << jres.dump(4) << '\n';
             });
         }
 
-        if (call->onRead) {
+        if (call->onRead_) {
             aioc->post([call, jres, result = session->res.result_int()]() {
-                (*call->onRead)(result < 200 || result >= 300, jres);
+                (*call->onRead_)(result < 200 || result >= 300, jres);
             });
         }
 
@@ -335,8 +335,8 @@ class RestBeast : public BASE,
             log::log(log::error, [ec, what, call](std::ostream *log) {
                 *log << what << ": " << ec.message();
                 if (call != nullptr) {
-                    *log << ' ' << *call->targetURL
-                         << (call->body ? call->body->dump(4) : "{}");
+                    *log << ' ' << *call->targetURL_
+                         << (call->body_ ? call->body_->dump(4) : "{}");
                 }
                 *log << '\n';
             });
