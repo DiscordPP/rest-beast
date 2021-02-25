@@ -23,7 +23,6 @@
 #include <nlohmann/json.hpp>
 
 #include <discordpp/botStruct.hh>
-#include <discordpp/call.hh>
 
 namespace discordpp {
 namespace beast = boost::beast;   // from <boost/beast.hpp>
@@ -42,19 +41,17 @@ class RestBeast : public BASE,
   public:
     // Objects are constructed with a strand to
     // ensure that handlers do not execute concurrently.
-    virtual void
-    initBot(unsigned int apiVersionIn, const std::string &tokenIn,
-            std::shared_ptr<boost::asio::io_context> aiocIn) override {
+    void initBot(unsigned int apiVersionIn, const std::string &tokenIn,
+                 std::shared_ptr<boost::asio::io_context> aiocIn) override {
         BASE::initBot(apiVersionIn, tokenIn, aiocIn);
         ctx_ = std::make_unique<ssl::context>(ssl::context::sslv23_client);
     }
 
-    virtual void call(sptr<Call> call) override {
+    void doCall(sptr<RenderedCall> call) override {
         std::ostringstream targetss;
-        targetss << "/api/v" << apiVersion << *call->targetURL;
+        targetss << "/api/v" << apiVersion << *call->target;
 
-        runRest("discordapp.com", "443",
-                http::string_to_verb(*call->requestType),
+        runRest("discordapp.com", "443", http::string_to_verb(*call->method),
                 targetss.str().c_str(), 11, call);
     }
 
@@ -73,9 +70,8 @@ class RestBeast : public BASE,
     std::unique_ptr<ssl::context> ctx_;
 
     // Start the asynchronous operation
-    void runRest(char const *host, char const *port,
-                 http::verb const requestType, char const *target, int version,
-                 sptr<Call> call) {
+    void runRest(char const *host, char const *port, http::verb const method,
+                 char const *target, int version, sptr<RenderedCall> call) {
         sptr<Session> session = std::make_shared<Session>(*aioc, *ctx_);
 
         // Set SNI Hostname (many hosts need this to handshake successfully)
@@ -87,19 +83,19 @@ class RestBeast : public BASE,
         }
 
         // Set up an HTTP GET request message
-        session->req.method(requestType);
+        session->req.method(method);
         session->req.target(target);
         session->req.version(version);
         session->req.set(http::field::host, host);
         session->req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-        session->req.set(http::field::content_type, "application/json");
+        session->req.set(http::field::content_type, *call->type);
         session->req.set(http::field::authorization, token);
         session->req.set("X-RateLimit-Precision", "millisecond");
         std::string payload = "";
         if (call->body != nullptr && !call->body->empty()) {
-            payload = call->body->dump();
+            payload = *call->body;
         }
-        if (requestType == http::verb::post || requestType == http::verb::put ||
+        if (method == http::verb::post || method == http::verb::put ||
             (call->body != nullptr && !call->body->empty())) {
             session->req.body() = payload;
             session->req.prepare_payload();
@@ -115,7 +111,7 @@ class RestBeast : public BASE,
     }
 
     void on_resolve(beast::error_code ec, tcp::resolver::results_type results,
-                    sptr<Session> session, sptr<Call> call,
+                    sptr<Session> session, sptr<RenderedCall> call,
                     const std::string target, const std::string payload,
                     char const *host, char const *port) {
         if (ec) {
@@ -161,7 +157,7 @@ class RestBeast : public BASE,
 
     void on_connect(beast::error_code ec,
                     tcp::resolver::results_type::endpoint_type,
-                    sptr<Session> session, sptr<Call> call,
+                    sptr<Session> session, sptr<RenderedCall> call,
                     const std::string target, const std::string payload) {
         if (ec) {
             if (call->onWrite)
@@ -180,7 +176,7 @@ class RestBeast : public BASE,
     }
 
     void on_handshake(beast::error_code ec, sptr<Session> session,
-                      sptr<Call> call, const std::string target,
+                      sptr<RenderedCall> call, const std::string target,
                       const std::string payload) {
         if (ec) {
             if (call->onWrite)
@@ -204,7 +200,7 @@ class RestBeast : public BASE,
     }
 
     void on_write(beast::error_code ec, std::size_t bytes_transferred,
-                  sptr<Session> session, sptr<Call> call,
+                  sptr<Session> session, sptr<RenderedCall> call,
                   const std::string target, const std::string payload) {
         boost::ignore_unused(bytes_transferred);
 
@@ -230,7 +226,7 @@ class RestBeast : public BASE,
     }
 
     void on_read(beast::error_code ec, std::size_t bytes_transferred,
-                 sptr<Session> session, sptr<Call> call,
+                 sptr<Session> session, sptr<RenderedCall> call,
                  const std::string target, const std::string payload) {
         boost::ignore_unused(bytes_transferred);
 
@@ -287,13 +283,13 @@ class RestBeast : public BASE,
         }
 
         log::log(log::debug, [call, jres](std::ostream *log) {
-            *log << "Read " << call->targetURL << jres.dump(4) << '\n';
+            *log << "Read " << call->target << jres.dump(4) << '\n';
         });
 
         if (session->res.result_int() < 200 ||
             session->res.result_int() >= 300) {
             log::log(log::error, [call, jres](std::ostream *log) {
-                *log << "Discord sent an error! " << call->targetURL
+                *log << "Discord sent an error! " << call->target
                      << jres.dump(4) << '\n';
             });
         }
@@ -329,14 +325,19 @@ class RestBeast : public BASE,
     }
 
     // Report a failure
-    static void fail(beast::error_code ec, char const *what, sptr<Call> call) {
+    static void fail(beast::error_code ec, char const *what,
+                     sptr<RenderedCall> call) {
         if (std::string(what) != "shutdown" &&
             ec.message() != "stream truncated") {
             log::log(log::error, [ec, what, call](std::ostream *log) {
                 *log << what << ": " << ec.message();
                 if (call != nullptr) {
-                    *log << ' ' << *call->targetURL
-                         << (call->body ? call->body->dump(4) : "{}");
+                    *log << ' ' << *call->target;
+                    if (call->body) {
+                        *log << call->body;
+                    } else {
+                        *log << " with no body";
+                    }
                 }
                 *log << '\n';
             });
