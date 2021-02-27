@@ -88,16 +88,15 @@ class RestBeast : public BASE,
         session->req.version(version);
         session->req.set(http::field::host, host);
         session->req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-        session->req.set(http::field::content_type, *call->type);
+        if (call->type) {
+            session->req.set(http::field::content_type, *call->type);
+        }
         session->req.set(http::field::authorization, token);
         session->req.set("X-RateLimit-Precision", "millisecond");
-        std::string payload = "";
-        if (call->body != nullptr && !call->body->empty()) {
-            payload = *call->body;
-        }
-        if (method == http::verb::post || method == http::verb::put ||
-            (call->body != nullptr && !call->body->empty())) {
-            session->req.body() = payload;
+        if (call->type &&
+            (method == http::verb::post || method == http::verb::put ||
+             (call->body != nullptr && !call->body->empty()))) {
+            session->req.body() = *call->body;
             session->req.prepare_payload();
         }
 
@@ -107,12 +106,12 @@ class RestBeast : public BASE,
             std::bind(beast::bind_front_handler(&RestBeast::on_resolve,
                                                 this->shared_from_this()),
                       std::placeholders::_1, std::placeholders::_2, session,
-                      call, std::string(target), payload, host, port));
+                      call, std::string(target), host, port));
     }
 
     void on_resolve(beast::error_code ec, tcp::resolver::results_type results,
                     sptr<Session> session, sptr<RenderedCall> call,
-                    const std::string target, const std::string payload,
+                    const std::string target,
                     char const *host, char const *port) {
         if (ec) {
             if (connecting_) {
@@ -120,8 +119,7 @@ class RestBeast : public BASE,
                 retry_ = std::make_unique<boost::asio::steady_timer>(
                     *aioc,
                     std::chrono::steady_clock::now() + std::chrono::seconds(5));
-                retry_->async_wait([this, host, port, session, call, target,
-                                    payload](const boost::system::error_code) {
+                retry_->async_wait([this, host, port, session, call, target](const boost::system::error_code) {
                     std::cerr << " retrying...\n";
                     session->resolver.async_resolve(
                         host, port,
@@ -129,7 +127,7 @@ class RestBeast : public BASE,
                             beast::bind_front_handler(&RestBeast::on_resolve,
                                                       this->shared_from_this()),
                             std::placeholders::_1, std::placeholders::_2,
-                            session, call, std::string(target), payload, host,
+                            session, call, std::string(target), host,
                             port));
                 });
                 return;
@@ -152,13 +150,13 @@ class RestBeast : public BASE,
                 std::bind(beast::bind_front_handler(&RestBeast::on_connect,
                                                     this->shared_from_this()),
                           std::placeholders::_1, std::placeholders::_2, session,
-                          call, target, payload));
+                          call, target));
     }
 
     void on_connect(beast::error_code ec,
                     tcp::resolver::results_type::endpoint_type,
                     sptr<Session> session, sptr<RenderedCall> call,
-                    const std::string target, const std::string payload) {
+                    const std::string target) {
         if (ec) {
             if (call->onWrite)
                 aioc->post([call] { (*call->onWrite)(true); });
@@ -172,12 +170,11 @@ class RestBeast : public BASE,
             ssl::stream_base::client,
             std::bind(beast::bind_front_handler(&RestBeast::on_handshake,
                                                 this->shared_from_this()),
-                      std::placeholders::_1, session, call, target, payload));
+                      std::placeholders::_1, session, call, target));
     }
 
     void on_handshake(beast::error_code ec, sptr<Session> session,
-                      sptr<RenderedCall> call, const std::string target,
-                      const std::string payload) {
+                      sptr<RenderedCall> call, const std::string target) {
         if (ec) {
             if (call->onWrite)
                 aioc->post([call] { (*call->onWrite)(true); });
@@ -196,12 +193,12 @@ class RestBeast : public BASE,
             std::bind(beast::bind_front_handler(&RestBeast::on_write,
                                                 this->shared_from_this()),
                       std::placeholders::_1, std::placeholders::_2, session,
-                      call, target, payload));
+                      call, target));
     }
 
     void on_write(beast::error_code ec, std::size_t bytes_transferred,
                   sptr<Session> session, sptr<RenderedCall> call,
-                  const std::string target, const std::string payload) {
+                  const std::string target) {
         boost::ignore_unused(bytes_transferred);
 
         if (ec) {
@@ -222,12 +219,12 @@ class RestBeast : public BASE,
             std::bind(beast::bind_front_handler(&RestBeast::on_read,
                                                 this->shared_from_this()),
                       std::placeholders::_1, std::placeholders::_2, session,
-                      call, target, payload));
+                      call, target));
     }
 
     void on_read(beast::error_code ec, std::size_t bytes_transferred,
                  sptr<Session> session, sptr<RenderedCall> call,
-                 const std::string target, const std::string payload) {
+                 const std::string target) {
         boost::ignore_unused(bytes_transferred);
 
         if (ec) {
@@ -251,7 +248,7 @@ class RestBeast : public BASE,
                     std::cerr << "Discord replied:\n"
                               << ss.str() << "\nTo the following target:\n"
                               << target << "\nWith the following payload:\n"
-                              << payload << std::endl;
+                              << *call->body << std::endl;
                 }
             }
         }
@@ -271,7 +268,7 @@ class RestBeast : public BASE,
             std::cout << "Discord API didn't like the following parts of your "
                          "embed: ";
             bool first = true;
-            for (const json& part : jres["embed"]) {
+            for (const json &part : jres["embed"]) {
                 if (first) {
                     first = false;
                 } else {
