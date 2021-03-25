@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD 14)
 add_library(${PROJECT_NAME} INTERFACE)
 
 add_library(beast INTERFACE)
-TARGET_INCLUDE_DIRECTORIES(beast INTERFACE ${DPP_Beast_SOURCE_DIR})
+target_include_directories(beast INTERFACE ${DPP_Beast_SOURCE_DIR})
 
-INCLUDE_DIRECTORIES(${discordpp_SOURCE_DIR} ${json_SOURCE_DIR})
-TARGET_LINK_LIBRARIES(${PROJECT_NAME} INTERFACE)
+target_include_directories(${PROJECT_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(${PROJECT_NAME} INTERFACE discordpp)
