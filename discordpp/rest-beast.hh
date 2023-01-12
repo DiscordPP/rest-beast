@@ -87,7 +87,7 @@ class RestBeast : public BASE,
         session->req.target(target);
         session->req.version(version);
         session->req.set(http::field::host, host);
-        session->req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+        session->req.set(http::field::user_agent, user_agent_);
         if (call->type) {
             session->req.set(http::field::content_type, *call->type);
         }
